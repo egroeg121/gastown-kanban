@@ -1,0 +1,7 @@
+# Gas Town runtime / local state — not part of the app
+.beads/
+.claude/
+.runtime/
+__pycache__/
+*.pyc
+.playwright-mcp/

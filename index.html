@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gas Town Kanban</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #181b22;
+    --panel-2: #1f232c;
+    --border: #2a2f3a;
+    --text: #e6e9ef;
+    --muted: #8b93a4;
+    --accent: #ffb454;
+    --backlog: #5a6173;
+    --progress: #4a9eff;
+    --done: #3fb950;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 20px;
+    background: linear-gradient(180deg, #14161c, #101218);
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .3px; }
+  header h1 .spark { color: var(--accent); }
+  header .meta { color: var(--muted); font-size: 12px; }
+  header .right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .pill {
+    font-size: 11px; padding: 3px 9px; border-radius: 999px;
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+  }
+  .dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align: middle; }
+  .dot.live { background: var(--done); box-shadow: 0 0 6px var(--done); }
+  .dot.stale { background: var(--accent); }
+  button.refresh {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 11px; cursor: pointer; font-size: 12px;
+  }
+  button.refresh:hover { border-color: var(--accent); }
+
+  main { padding: 16px 20px 60px; }
+
+  .rig {
+    margin-bottom: 22px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .rig > .rig-head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 10px 16px;
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer; user-select: none;
+  }
+  .rig-head .name { font-weight: 600; font-size: 15px; }
+  .rig-head .prefix { color: var(--muted); font-size: 12px; }
+  .rig-head .totals { margin-left: auto; color: var(--muted); font-size: 12px; }
+  .rig-head .chev { color: var(--muted); transition: transform .15s; }
+  .rig.collapsed .chev { transform: rotate(-90deg); }
+  .rig.collapsed .lanes { display: none; }
+
+  .lanes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); }
+  .lane { background: var(--panel); padding: 10px; min-height: 60px; }
+  .lane-head {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; text-transform: uppercase; letter-spacing: .6px;
+    color: var(--muted); margin-bottom: 10px;
+  }
+  .lane-head .bar { width: 22px; height: 3px; border-radius: 2px; }
+  .lane[data-col=backlog] .bar { background: var(--backlog); }
+  .lane[data-col=in_progress] .bar { background: var(--progress); }
+  .lane[data-col=done] .bar { background: var(--done); }
+  .lane-head .cnt {
+    margin-left: auto; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 999px; padding: 1px 8px; color: var(--text); font-size: 11px;
+  }
+
+  .card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--backlog);
+    border-radius: 7px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color .12s, transform .06s;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card:active { transform: scale(.995); }
+  .card .title { font-size: 13px; margin-bottom: 6px; }
+  .card .row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .tag {
+    font-size: 10px; padding: 1px 6px; border-radius: 4px;
+    background: #2a2f3a; color: var(--muted); text-transform: uppercase; letter-spacing: .4px;
+  }
+  .tag.type-bug { background: #3a2020; color: #ff8a8a; }
+  .tag.type-feature { background: #1f3326; color: #7fe0a0; }
+  .tag.type-epic { background: #332a14; color: var(--accent); }
+  .id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; color: var(--muted); }
+  .assignee { font-size: 11px; color: var(--accent); margin-left: auto; }
+  .prio { font-weight: 700; font-size: 10px; padding: 1px 5px; border-radius: 4px; }
+  .prio.p0 { background:#4a1416; color:#ff9c9c; }
+  .prio.p1 { background:#402d14; color:#ffcf8a; }
+  .prio.p2 { background:#1d2733; color:#9cc4ff; }
+  .prio.p3, .prio.p4 { background:#222730; color: var(--muted); }
+
+  /* priority left-border accents on cards */
+  .card.p0 { border-left-color:#ff6b6b; }
+  .card.p1 { border-left-color: var(--accent); }
+  .card.p2 { border-left-color: var(--progress); }
+
+  .empty { color: #4a4f5a; font-size: 12px; font-style: italic; padding: 4px 2px; }
+
+  /* modal */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6);
+    display: none; align-items: flex-start; justify-content: center; z-index: 20;
+    padding: 60px 20px; overflow-y: auto;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    max-width: 760px; width: 100%; padding: 0;
+  }
+  .modal-head { padding: 16px 20px; border-bottom: 1px solid var(--border); display:flex; gap:10px; align-items:flex-start; }
+  .modal-head h2 { margin: 0; font-size: 16px; flex: 1; }
+  .modal-head .close { cursor:pointer; color: var(--muted); font-size: 22px; line-height: 1; background:none; border:none; }
+  .modal-body { padding: 16px 20px; }
+  .modal-body h3 { font-size: 11px; text-transform: uppercase; letter-spacing:.6px; color: var(--muted); margin: 18px 0 6px; }
+  .modal-body h3:first-child { margin-top: 0; }
+  .modal-body pre {
+    white-space: pre-wrap; word-wrap: break-word; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin: 0;
+    font: 12px/1.5 ui-monospace, Menlo, monospace; color: var(--text);
+  }
+  .kv { display: grid; grid-template-columns: 120px 1fr; gap: 4px 12px; font-size: 13px; }
+  .kv .k { color: var(--muted); }
+  .loading { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="spark">⚙</span> Gas Town Kanban</h1>
+  <span class="meta" id="genat"></span>
+  <div class="right">
+    <span class="pill"><span class="dot live" id="livedot"></span><span id="livetxt">live</span></span>
+    <span class="pill" id="autopill">auto-refresh 30s</span>
+    <button class="refresh" id="refreshBtn">↻ Refresh</button>
+  </div>
+</header>
+
+<main id="board"><p class="loading">Loading board…</p></main>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="m-title">…</h2>
+      <button class="close" id="m-close">×</button>
+    </div>
+    <div class="modal-body" id="m-body"><p class="loading">Loading…</p></div>
+  </div>
+</div>
+
+<script>
+const REFRESH_MS = 30000;
+const COL_LABELS = { backlog: "Backlog", in_progress: "In Progress", done: "Done" };
+const COL_ORDER = ["backlog", "in_progress", "done"];
+const board = document.getElementById("board");
+const overlay = document.getElementById("overlay");
+
+// Remember which rigs the user collapsed, across refreshes.
+const collapsed = new Set();
+
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function prioClass(p) {
+  if (p === 0) return "p0";
+  if (p === 1) return "p1";
+  if (p === 2) return "p2";
+  return "p3";
+}
+
+function cardHtml(c) {
+  const pc = prioClass(c.priority);
+  const typeClass = c.type ? "type-" + esc(c.type) : "";
+  const assignee = c.assignee ? `<span class="assignee">@${esc(c.assignee)}</span>` : "";
+  return `
+    <div class="card ${pc}" data-id="${esc(c.id)}">
+      <div class="title">${esc(c.title)}</div>
+      <div class="row">
+        <span class="id">${esc(c.id)}</span>
+        <span class="prio ${pc}">P${c.priority ?? "?"}</span>
+        ${c.type ? `<span class="tag ${typeClass}">${esc(c.type)}</span>` : ""}
+        ${assignee}
+      </div>
+    </div>`;
+}
+
+function laneHtml(col, cards) {
+  const body = cards.length
+    ? cards.map(cardHtml).join("")
+    : `<div class="empty">— none —</div>`;
+  return `
+    <div class="lane" data-col="${col}">
+      <div class="lane-head">
+        <span class="bar"></span>${COL_LABELS[col]}
+        <span class="cnt">${cards.length}</span>
+      </div>
+      ${body}
+    </div>`;
+}
+
+function rigHtml(rig) {
+  const isCollapsed = collapsed.has(rig.name);
+  const lanes = COL_ORDER.map(col => laneHtml(col, rig.columns[col] || [])).join("");
+  const c = rig.counts || {};
+  return `
+    <section class="rig ${isCollapsed ? "collapsed" : ""}" data-rig="${esc(rig.name)}">
+      <div class="rig-head">
+        <span class="chev">▾</span>
+        <span class="name">${esc(rig.name)}</span>
+        <span class="prefix">${esc(rig.prefix)}-</span>
+        <span class="totals">${c.backlog||0} backlog · ${c.in_progress||0} active · ${c.done||0} done</span>
+      </div>
+      <div class="lanes">${lanes}</div>
+    </section>`;
+}
+
+function render(data) {
+  if (data.error && (!data.rigs || !data.rigs.length)) {
+    board.innerHTML = `<p class="loading">Error: ${esc(data.error)}</p>`;
+    return;
+  }
+  document.getElementById("genat").textContent =
+    "updated " + (data.generated_at || "").replace("T", " ");
+  if (!data.rigs.length) {
+    board.innerHTML = `<p class="loading">No rigs found.</p>`;
+    return;
+  }
+  board.innerHTML = data.rigs.map(rigHtml).join("");
+}
+
+async function load() {
+  try {
+    const r = await fetch("/api/board", { cache: "no-store" });
+    const data = await r.json();
+    render(data);
+    setLive(true);
+  } catch (e) {
+    setLive(false);
+  }
+}
+
+function setLive(ok) {
+  const dot = document.getElementById("livedot");
+  const txt = document.getElementById("livetxt");
+  dot.className = "dot " + (ok ? "live" : "stale");
+  txt.textContent = ok ? "live" : "offline";
+}
+
+// Card click -> bead detail modal.
+board.addEventListener("click", e => {
+  const card = e.target.closest(".card");
+  if (card) { openBead(card.dataset.id); return; }
+  const head = e.target.closest(".rig-head");
+  if (head) {
+    const rig = head.closest(".rig");
+    const name = rig.dataset.rig;
+    rig.classList.toggle("collapsed");
+    if (rig.classList.contains("collapsed")) collapsed.add(name);
+    else collapsed.delete(name);
+  }
+});
+
+async function openBead(id) {
+  document.getElementById("m-title").textContent = id;
+  document.getElementById("m-body").innerHTML = `<p class="loading">Loading ${esc(id)}…</p>`;
+  overlay.classList.add("open");
+  try {
+    const r = await fetch("/api/bead/" + encodeURIComponent(id), { cache: "no-store" });
+    if (!r.ok) throw new Error("not found");
+    const b = await r.json();
+    renderBead(b);
+  } catch (e) {
+    document.getElementById("m-body").innerHTML = `<p class="loading">Could not load ${esc(id)}.</p>`;
+  }
+}
+
+function section(label, value) {
+  if (!value || !String(value).trim()) return "";
+  return `<h3>${label}</h3><pre>${esc(value)}</pre>`;
+}
+
+function renderBead(b) {
+  document.getElementById("m-title").textContent = `${b.id} — ${b.title || ""}`;
+  const kv = `
+    <div class="kv">
+      <span class="k">Status</span><span>${esc(b.status)}</span>
+      <span class="k">Type</span><span>${esc(b.issue_type)}</span>
+      <span class="k">Priority</span><span>P${b.priority ?? "?"}</span>
+      <span class="k">Assignee</span><span>${esc(b.assignee || "—")}</span>
+      <span class="k">Owner</span><span>${esc(b.owner || "—")}</span>
+      <span class="k">Created</span><span>${esc((b.created_at||"").replace("T"," "))}</span>
+      <span class="k">Updated</span><span>${esc((b.updated_at||"").replace("T"," "))}</span>
+      ${b.closed_at ? `<span class="k">Closed</span><span>${esc(b.closed_at.replace("T"," "))}</span>` : ""}
+    </div>`;
+  document.getElementById("m-body").innerHTML =
+    kv +
+    section("Description", b.description) +
+    section("Design", b.design) +
+    section("Acceptance criteria", b.acceptance_criteria) +
+    section("Notes", b.notes) +
+    section("Close reason", b.close_reason);
+}
+
+document.getElementById("m-close").addEventListener("click", () => overlay.classList.remove("open"));
+overlay.addEventListener("click", e => { if (e.target === overlay) overlay.classList.remove("open"); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") overlay.classList.remove("open"); });
+document.getElementById("refreshBtn").addEventListener("click", load);
+
+load();
+setInterval(load, REFRESH_MS);
+</script>
+</body>
+</html>
