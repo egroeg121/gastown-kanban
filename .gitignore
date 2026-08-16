@@ -5,3 +5,11 @@
 __pycache__/
 *.pyc
 .playwright-mcp/
+
+# Gas Town (added by gt)
+.opencode/
+.logs/
+state.json
+CLAUDE.md
+CLAUDE.local.md
+GEMINI.md
